@@ -578,24 +578,6 @@ html, body {
   object-fit: contain;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   LOADER
-───────────────────────────────────────────────────────────── */
-.loader-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(255,252,0,0.85);
-  z-index: 400;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 16px;
-}
-.loader-overlay.show { display: flex; }
-.loader-ghost { font-size: 64px; animation: ghostFloat 1s ease-in-out infinite; }
-.loader-text { font-size: 14px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: rgba(0,0,0,0.6); }
-
 /* Mobile safe area */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .input-area { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
@@ -608,12 +590,6 @@ html, body {
 </style>
 </head>
 <body>
-
-<!-- LOADER -->
-<div class="loader-overlay" id="loader">
-  <div class="loader-ghost">👻</div>
-  <div class="loader-text">Connecting...</div>
-</div>
 
 <!-- ── LANDING ── -->
 <div id="landing" class="screen active">
@@ -723,7 +699,7 @@ import { getDatabase, ref, push, onChildAdded, onValue, set, remove, serverTimes
 const firebaseConfig = {
   apiKey: "AIzaSyCELzA35aBgDUzzb3ajP4aFquRMXKkT0E8",
   authDomain: "live-loc-d79b5.firebaseapp.com",
-  databaseURL: "https://live-loc-d79b5-default-rtdb.asia-southeast1.firebasedatabase.app",
+  databaseURL: "https://live-loc-d79b5-default-rtdb.firebaseio.com",
   projectId: "live-loc-d79b5",
   storageBucket: "live-loc-d79b5.firebasestorage.app",
   messagingSenderId: "782668598826",
@@ -763,21 +739,6 @@ function initFirebase() {
     console.error('Firebase init error:', e);
     return false;
   }
-}
-
-// ── Test live DB connection ──
-function testConnection() {
-  return new Promise((resolve) => {
-    const testRef = ref(db, '.info/connected');
-    let settled = false;
-    const unsub = onValue(testRef, (snap) => {
-      if (settled) return;
-      settled = true;
-      unsub();
-      resolve(snap.val() === true);
-    }, () => { settled = true; unsub(); resolve(false); });
-    setTimeout(() => { if (!settled) { settled = true; unsub(); resolve(false); } }, 8000);
-  });
 }
 
 // ── Check URL for room on load ──
@@ -836,31 +797,14 @@ async function startChat(name, room) {
   roomId = room.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 40);
   myId = Math.random().toString(36).slice(2);
 
-  showLoader(true);
-
-  // ── Test real Firebase connection first ──
-  const connected = await testConnection();
-  if (!connected) {
-    showLoader(false);
-    showError(
-      "❌ Cannot connect to Firebase Realtime Database.\n\n" +
-      "Steps to fix:\n" +
-      "1. Go to console.firebase.google.com\n" +
-      "2. Select your project: live-loc-d79b5\n" +
-      "3. Left menu → Build → Realtime Database\n" +
-      "4. Click 'Create database' → choose region → Start in test mode\n" +
-      "5. Reload this page and try again."
-    );
-    return;
-  }
-
-  // Update URL
-  history.replaceState(null, '', '#room=' + encodeURIComponent(roomId));
-
-  // Switch screens
+  // Switch screens immediately — no blocking
   document.getElementById('landing').classList.remove('active');
   document.getElementById('chat').classList.add('active');
   document.getElementById('room-display').textContent = '# ' + roomId;
+  document.getElementById('online-count').textContent = '1 online';
+
+  // Update URL
+  history.replaceState(null, '', '#room=' + encodeURIComponent(roomId));
 
   // Firebase refs
   messagesRef = ref(db, 'rooms/' + roomId + '/messages');
@@ -918,7 +862,6 @@ async function startChat(name, room) {
   // Unload
   window.addEventListener('beforeunload', cleanup);
 
-  showLoader(false);
   setTimeout(() => ta.focus(), 400);
 }
 
@@ -1107,10 +1050,6 @@ async function cleanup() {
 }
 
 // ── Helpers ──
-function showLoader(show) {
-  document.getElementById('loader').classList[show ? 'add' : 'remove']('show');
-}
-
 function shake(id) {
   const el = document.getElementById(id);
   el.style.animation = 'none';
